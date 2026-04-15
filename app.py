@@ -199,7 +199,7 @@ st.markdown("""
 # ═══════════════════════════════════════════════════════
 # CORE ENGINE (model + detection + drawing)
 # ═══════════════════════════════════════════════════════
-MODEL_PATH =  "/content/best_float32.tflite"
+MODEL_PATH = "best_float32.tflite"
 
 
 @st.cache_resource
