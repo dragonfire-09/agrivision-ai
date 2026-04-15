@@ -49,7 +49,7 @@ TRANSLATIONS = {
         "density_threshold": "Yoğunluk Eşiği (%)",
         "enable_alerts": "Uyarıları Aç",
         "photo_tab": "📸 Fotoğraf",
-        "weather_tab": "🌡️ Hava & İlaçalama",
+        "weather_tab": "🌡️ Hava & İlaçlama",
         "ai_tab": "🧠 AI Danışmanlık",
         "video_tab": "🎥 Video",
         "analytics_tab": "📊 Analitik",
