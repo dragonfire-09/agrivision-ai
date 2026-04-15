@@ -61,10 +61,8 @@ def containment(box1, box2):
     smaller_area = min(area1, area2)
     return inter / smaller_area if smaller_area > 0 else 0
 
-def class_aware_nms(boxes, scores, classes, iou_threshold=0.3, containment_threshold=0.6):
-    """Sınıf bazlı NMS: WEED ve CROP ayrı ayrı"""
+def class_aware_nms(boxes, scores, classes, iou_threshold=0.2, containment_threshold=0.6):
     if not boxes: return []
-    
     unique_classes = list(set(classes))
     all_keep = []
     
@@ -133,16 +131,22 @@ except Exception as e:
     st.error(f"❌ {e}")
     st.stop()
 
-# CONTROLS
-col1, col2, col3 = st.columns(3)
+# ═══════════════════════════════════════════════════════════════
+# 🎛️ CONTROLS (4 slider!)
+# ═══════════════════════════════════════════════════════════════
+st.markdown("### 🎛️ Kontrol Paneli")
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     uploaded = st.file_uploader("📁 Fotoğraf", type=["jpg","png","jpeg"])
 with col2:
-    threshold = st.slider("🎯 Confidence", 0.1, 0.9, 0.3, 0.05)
+    threshold = st.slider("🎯 Confidence", 0.1, 0.9, 0.3, 0.05,
+                          help="Minimum güven eşiği")
 with col3:
-    # 🔥 BOYUT EŞİĞİ: Bu değerden küçük = WEED, büyük = CROP
     size_threshold = st.slider("📏 Boyut Eşiği (%)", 5, 50, 15, 1,
-                               help="Bu yüzdeden küçük kutular = WEED, büyük = CROP")
+                               help="Küçük = WEED, Büyük = CROP")
+with col4:
+    nms_iou = st.slider("🔗 NMS IoU", 0.1, 0.7, 0.2, 0.05,
+                         help="Düşük = daha az üst üste kutu")
 
 if uploaded:
     original_img = Image.open(uploaded).convert("RGB")
@@ -158,16 +162,12 @@ if uploaded:
         output_data = interpreter.get_tensor(output_details[0]['index'])[0]
         preds = np.transpose(output_data, (1, 0))
     
-    # ═══════════════════════════════════════════════════════════════
-    # 🔥 TÜM DETECTION'LARI TOPLA (class fark etmez)
-    # ═══════════════════════════════════════════════════════════════
+    # TÜM DETECTION'LARI TOPLA
     raw_boxes, raw_scores = [], []
     
     for row in preds:
         x, y, bw, bh = row[0], row[1], row[2], row[3]
         class_scores = row[4:]
-        
-        # En yüksek confidence
         best_score = np.max(class_scores)
         
         if best_score < threshold:
@@ -182,9 +182,7 @@ if uploaded:
             raw_boxes.append([x1, y1, x2, y2])
             raw_scores.append(float(best_score))
     
-    # ═══════════════════════════════════════════════════════════════
-    # 🔥 BOYUTA GÖRE SINIFLANDIR
-    # ═══════════════════════════════════════════════════════════════
+    # BOYUTA GÖRE SINIFLANDIR
     boxes_all, scores_all, classes_all, areas_all = [], [], [], []
     size_limit = total_area * (size_threshold / 100)
     
@@ -192,7 +190,6 @@ if uploaded:
         x1, y1, x2, y2 = raw_boxes[i]
         box_area = (x2 - x1) * (y2 - y1)
         
-        # 🔥 KÜÇÜK = WEED, BÜYÜK = CROP
         if box_area < size_limit:
             detected_class = "WEED"
         else:
@@ -203,10 +200,11 @@ if uploaded:
         classes_all.append(detected_class)
         areas_all.append(box_area)
     
-    # CLASS-AWARE NMS
+    # 🔥 CLASS-AWARE NMS (slider'dan gelen IoU!)
     keep_indices = class_aware_nms(
         boxes_all, scores_all, classes_all,
-        iou_threshold=0.3, containment_threshold=0.6
+        iou_threshold=nms_iou,
+        containment_threshold=0.6
     )
     
     # DRAW
@@ -256,14 +254,14 @@ if uploaded:
         </div>""", unsafe_allow_html=True)
     
     # IMAGES
-    st.markdown("### 🖼️ Görüntü Karşılaştırma")
+    st.markdown("### 🖼️ Karşılaştırma")
     col_img1, col_img2 = st.columns(2)
     with col_img1:
         st.image(original_img, caption="📸 Orijinal", use_container_width=True)
     with col_img2:
         st.image(result_img, caption="🎯 Tespit", use_container_width=True)
     
-    # DETECTION TABLE
+    # DETAILS
     if keep_indices:
         st.markdown("### 📋 Detaylar")
         col_d1, col_d2 = st.columns(2)
@@ -302,7 +300,7 @@ st.markdown("""
 <div style='text-align:center; padding:2rem; margin-top:3rem;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius:20px; color:white;'>
-    <h3>🌾 Precision Agriculture AI</h3>
-    <p>🌿 Küçük = WEED (kırmızı) | 🌾 Büyük = CROP (yeşil)</p>
+    <h3>🌾 AgriVision AI Pro</h3>
+    <p>🌿 Küçük = WEED | 🌾 Büyük = CROP | 🔗 NMS = Temiz Kutular</p>
 </div>
 """, unsafe_allow_html=True)
