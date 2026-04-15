@@ -1,6 +1,6 @@
-streamlit
-numpy
-Pillow
-opencv-python-headless
-pandas
-onnxruntime
+streamlit==1.32.0
+numpy==1.26.4
+Pillow==10.3.0
+tensorflow==2.15.0
+opencv-python-headless==4.9.0.80
+pandas==2.2.2
