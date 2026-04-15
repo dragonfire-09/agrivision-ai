@@ -1076,7 +1076,7 @@ with tab2:
 
 
 # ═══════════════════════════════════════════════════════════════
-# TAB 3: HAVA DURUMU & İLAÇALAMA
+# TAB 3: HAVA DURUMU & İLAÇLAMA
 # ═══════════════════════════════════════════════════════════════
 with tab3:
     st.markdown(f"<div class='tab-header'>🌡️ {t('weather_tab')}</div>", unsafe_allow_html=True)
