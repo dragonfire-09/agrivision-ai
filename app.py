@@ -740,8 +740,7 @@ with tab1:
         with c3:
             st.markdown(f"<div class='glass-card'><div class='metric-icon'>📊</div><div class='metric-value' style='color:#FFA502'>{wd:.1f}%</div><div class='metric-label'>{t('density')}</div></div>", unsafe_allow_html=True)
         with c4:
-            st.markdown(f"<div class='glass-card'><div class='metric-icon'>🎯</div><div class='metric-value' style='color:#3 
-742FA'>{ac:.0%}</div><div class='metric-label'>{t('conf')}</div></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='glass-card'><div class='metric-icon'>🎯</div><div class='metric-value' style='color:#3 742FA'>{ac:.0%}</div><div class='metric-label'>{t('conf')}</div></div>", unsafe_allow_html=True)
         
         # Images
         i1, i2 = st.columns(2)
