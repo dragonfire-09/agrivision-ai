@@ -1,6 +1,9 @@
-streamlit==1.32.0
-numpy==1.26.4
-Pillow==10.3.0
-tensorflow==2.15.0
-plotly==5.22.0
+streamlit
+tensorflow
+numpy
+Pillow
+plotly
+fpdf2
+opencv-python-headless
+pandas
 matplotlib
