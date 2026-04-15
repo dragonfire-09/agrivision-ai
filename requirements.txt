@@ -3,7 +3,7 @@ tensorflow
 numpy
 Pillow
 plotly
-fpdf2
+fpdf2==2.8.1
 opencv-python-headless
 pandas
 matplotlib
