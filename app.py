@@ -7,21 +7,16 @@ import io
 from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
-from fpdf import FPDF
 import tempfile
 import cv2
+import pandas as pd
 
 MODEL_PATH = str(Path(__file__).parent / "best_float32.tflite")
 
-# ═══════════════════════════════════════════════════════════════
-# CSS
-# ═══════════════════════════════════════════════════════════════
 GLASS_CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-
 * { font-family: 'Inter', sans-serif; }
-
 .glass-card { 
     background: rgba(255,255,255,0.15); 
     backdrop-filter: blur(12px); 
@@ -39,7 +34,6 @@ GLASS_CSS = """
 .metric-icon { font-size: 2.5em; margin-bottom: 0.3rem; }
 .metric-value { font-size: 2.2em; font-weight: 700; margin: 0; }
 .metric-label { color: rgba(255,255,255,0.8); margin: 0; font-size: 0.9em; }
-
 .tab-header {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     padding: 0.8rem 1.5rem;
@@ -49,7 +43,6 @@ GLASS_CSS = """
     margin-bottom: 1rem;
     text-align: center;
 }
-
 .detection-badge {
     display: inline-block;
     padding: 0.5rem 1rem;
@@ -57,14 +50,6 @@ GLASS_CSS = """
     border-radius: 10px;
     font-weight: bold;
     color: white;
-}
-
-.stTabs [data-baseweb="tab-list"] {
-    gap: 8px;
-}
-.stTabs [data-baseweb="tab"] {
-    border-radius: 10px;
-    padding: 10px 20px;
 }
 </style>
 """
@@ -77,10 +62,6 @@ st.set_page_config(
 )
 st.markdown(GLASS_CSS, unsafe_allow_html=True)
 
-
-# ═══════════════════════════════════════════════════════════════
-# HEADER
-# ═══════════════════════════════════════════════════════════════
 st.markdown("""
 <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             padding: 2rem; border-radius: 20px; text-align: center; margin-bottom: 2rem;
@@ -177,15 +158,12 @@ def draw_detections(img, boxes, scores, classes, keep_indices):
         draw.text((lx + 8, ly + 5), label, fill="white", font=font)
     return img
 
-def process_image(img, interpreter, input_details, output_details, 
+def process_image(img, interpreter, input_details, output_details,
                   threshold, size_threshold, nms_iou):
-    """Tek bir görüntüyü işle"""
     w, h = img.size
     total_area = w * h
-    
     resized = img.resize((640, 640))
     arr = np.expand_dims(np.array(resized, dtype=np.float32) / 255.0, 0)
-    
     interpreter.set_tensor(input_details[0]['index'], arr)
     interpreter.invoke()
     output_data = interpreter.get_tensor(output_details[0]['index'])[0]
@@ -207,7 +185,6 @@ def process_image(img, interpreter, input_details, output_details,
     
     boxes_all, scores_all, classes_all, areas_all = [], [], [], []
     size_limit = total_area * (size_threshold / 100)
-    
     for i in range(len(raw_boxes)):
         x1, y1, x2, y2 = raw_boxes[i]
         box_area = (x2 - x1) * (y2 - y1)
@@ -219,16 +196,13 @@ def process_image(img, interpreter, input_details, output_details,
     
     keep_indices = class_aware_nms(boxes_all, scores_all, classes_all,
                                     iou_threshold=nms_iou, containment_threshold=0.6)
-    
     return boxes_all, scores_all, classes_all, areas_all, keep_indices
 
 def generate_heatmap(boxes, scores, classes, keep_indices, w, h):
-    """Weed yoğunluk haritası oluştur"""
     grid_size = 20
     rows = h // grid_size + 1
     cols = w // grid_size + 1
     density_map = np.zeros((rows, cols))
-    
     for i in keep_indices:
         if classes[i] == "WEED":
             x1, y1, x2, y2 = boxes[i]
@@ -238,37 +212,35 @@ def generate_heatmap(boxes, scores, classes, keep_indices, w, h):
             c1 = max(0, x1 // grid_size)
             c2 = min(cols, x2 // grid_size + 1)
             density_map[r1:r2, c1:c2] += conf
-    
     return density_map
 
-def generate_pdf_report(result_img, weed_count, crop_count, weed_density, 
+def generate_pdf_report(result_img, weed_count, crop_count, weed_density,
                         avg_conf, boxes, scores, classes, keep_indices,
                         gps_lat, gps_lon):
-    """PDF rapor oluştur"""
+    try:
+        from fpdf import FPDF
+    except ImportError:
+        return None
+    
     pdf = FPDF()
     pdf.add_page()
     
-    # Başlık
     pdf.set_font("Helvetica", "B", 24)
     pdf.cell(0, 15, "AgriVision AI Pro - Field Report", ln=True, align="C")
     pdf.ln(5)
     
-    # Tarih
     pdf.set_font("Helvetica", "", 12)
     pdf.cell(0, 8, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=True)
     
-    # GPS
     if gps_lat and gps_lon:
         pdf.cell(0, 8, f"GPS: {gps_lat:.6f}, {gps_lon:.6f}", ln=True)
     pdf.ln(5)
     
-    # Görüntü
     with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
         result_img.save(tmp.name)
         pdf.image(tmp.name, x=10, w=190)
     pdf.ln(5)
     
-    # Özet
     pdf.set_font("Helvetica", "B", 16)
     pdf.cell(0, 10, "Detection Summary", ln=True)
     pdf.ln(3)
@@ -280,7 +252,6 @@ def generate_pdf_report(result_img, weed_count, crop_count, weed_density,
     pdf.cell(95, 8, f"Avg Confidence: {avg_conf:.0%}", border=1, ln=True)
     pdf.ln(5)
     
-    # Detaylar
     pdf.set_font("Helvetica", "B", 14)
     pdf.cell(0, 10, "Detection Details", ln=True)
     pdf.ln(3)
@@ -301,14 +272,13 @@ def generate_pdf_report(result_img, weed_count, crop_count, weed_density,
         pdf.cell(50, 8, f"({x1},{y1})-({x2},{y2})", border=1, align="C")
         pdf.cell(40, 8, f"{(x2-x1)}x{(y2-y1)}", border=1, align="C", ln=True)
     
-    # Öneri
     pdf.ln(10)
     pdf.set_font("Helvetica", "B", 14)
     pdf.cell(0, 10, "Recommendations", ln=True)
     pdf.set_font("Helvetica", "", 11)
     
     if weed_density > 20:
-        pdf.multi_cell(0, 7, "HIGH ALERT: Weed density is above 20%. Immediate herbicide application recommended.")
+        pdf.multi_cell(0, 7, "HIGH ALERT: Weed density above 20%. Immediate herbicide application recommended.")
     elif weed_density > 10:
         pdf.multi_cell(0, 7, "WARNING: Moderate weed presence. Targeted spot treatment recommended.")
     elif weed_count > 0:
@@ -347,8 +317,8 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 🗺️ GPS Koordinatları")
-    gps_lat = st.number_input("📍 Enlem (Lat)", value=39.9334, format="%.6f")
-    gps_lon = st.number_input("📍 Boylam (Lon)", value=32.8597, format="%.6f")
+    gps_lat = st.number_input("📍 Enlem", value=39.9334, format="%.6f")
+    gps_lon = st.number_input("📍 Boylam", value=32.8597, format="%.6f")
     
     st.markdown("---")
     st.markdown("""
@@ -356,21 +326,20 @@ with st.sidebar:
                 border-radius:10px;'>
         <p style='margin:0; font-size:0.8em;'>
             🌿 Küçük = WEED<br>
-            🌾 Büyük = CROP<br>
-            🎯 0.60 | 📏 42% | 🔗 0.20
+            🌾 Büyük = CROP
         </p>
     </div>
     """, unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════
-# ANA SEKMELER
+# SEKMELER
 # ═══════════════════════════════════════════════════════════════
 tab1, tab2, tab3 = st.tabs(["📸 Fotoğraf Analizi", "🎥 Video Analizi", "🗺️ GPS Harita"])
 
 
 # ═══════════════════════════════════════════════════════════════
-# TAB 1: FOTOĞRAF ANALİZİ
+# TAB 1: FOTOĞRAF
 # ═══════════════════════════════════════════════════════════════
 with tab1:
     uploaded = st.file_uploader("📁 Tarla Fotoğrafı Yükle", type=["jpg", "png", "jpeg"])
@@ -380,7 +349,7 @@ with tab1:
         w, h = original_img.size
         total_area = w * h
         
-        with st.spinner("🔍 AI Analizi yapılıyor..."):
+        with st.spinner("🔍 AI Analizi..."):
             boxes_all, scores_all, classes_all, areas_all, keep_indices = process_image(
                 original_img, interpreter, input_details, output_details,
                 threshold, size_threshold, nms_iou
@@ -388,10 +357,9 @@ with tab1:
         
         result_img = original_img.copy()
         if keep_indices:
-            result_img = draw_detections(result_img, boxes_all, scores_all, 
+            result_img = draw_detections(result_img, boxes_all, scores_all,
                                          classes_all, keep_indices)
         
-        # Metrikler
         weed_count = sum(1 for i in keep_indices if classes_all[i] == "WEED")
         crop_count = sum(1 for i in keep_indices if classes_all[i] == "CROP")
         weed_area = sum(areas_all[i] for i in keep_indices if classes_all[i] == "WEED")
@@ -436,64 +404,58 @@ with tab1:
         with col_img2:
             st.image(result_img, caption="🎯 Tespit", use_container_width=True)
         
-        # ═══════════════════════════════════════════════════════════
-        # 📈 HEATMAP
-        # ═══════════════════════════════════════════════════════════
+        # Heatmap
         st.markdown("### 📈 Yabancı Ot Yoğunluk Haritası")
-        
         if weed_count > 0:
-            density_map = generate_heatmap(boxes_all, scores_all, classes_all, 
+            density_map = generate_heatmap(boxes_all, scores_all, classes_all,
                                            keep_indices, w, h)
-            
             fig = px.imshow(
                 density_map,
                 color_continuous_scale='RdYlGn_r',
-                title="🔴 Kırmızı = Yüksek Yoğunluk | 🟢 Yeşil = Düşük Yoğunluk",
+                title="🔴 Kırmızı = Yüksek | 🟢 Yeşil = Düşük",
                 labels={'color': 'Ot Yoğunluğu'}
             )
-            fig.update_layout(
-                height=400,
-                margin=dict(r=0, t=40, l=0, b=0),
-                coloraxis_colorbar=dict(title="Yoğunluk")
-            )
+            fig.update_layout(height=400, margin=dict(r=0, t=40, l=0, b=0))
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.success("✅ Yabancı ot bulunamadı! Heatmap gereksiz.")
+            st.success("✅ Yabancı ot bulunamadı!")
         
-        # ═══════════════════════════════════════════════════════════
-        # 📋 DETAYLAR
-        # ═══════════════════════════════════════════════════════════
+        # Detaylar
         if keep_indices:
             st.markdown("### 📋 Tespit Detayları")
             col_d1, col_d2 = st.columns(2)
             with col_d1:
                 st.markdown("**🌿 Yabancı Otlar:**")
+                weed_found = False
                 for i in keep_indices:
                     if classes_all[i] == "WEED":
+                        weed_found = True
                         area_pct = (areas_all[i] / total_area) * 100
                         st.markdown(f"""
                         <div class="detection-badge" style="background:#FF4757;">
                             🌿 WEED {scores_all[i]:.0%} | Alan: {area_pct:.1f}%
                         </div>""", unsafe_allow_html=True)
+                if not weed_found:
+                    st.success("✅ Ot yok!")
             with col_d2:
                 st.markdown("**🌾 Mahsuller:**")
+                crop_found = False
                 for i in keep_indices:
                     if classes_all[i] == "CROP":
+                        crop_found = True
                         area_pct = (areas_all[i] / total_area) * 100
                         st.markdown(f"""
                         <div class="detection-badge" style="background:#2ED573;">
                             🌾 CROP {scores_all[i]:.0%} | Alan: {area_pct:.1f}%
                         </div>""", unsafe_allow_html=True)
+                if not crop_found:
+                    st.warning("⚠️ Mahsul bulunamadı!")
         
-        # ═══════════════════════════════════════════════════════════
-        # 💾 İNDİRME SEÇENEKLERİ
-        # ═══════════════════════════════════════════════════════════
+        # İndirme
         st.markdown("### 💾 İndirme Seçenekleri")
-        col_dl1, col_dl2, col_dl3 = st.columns(3)
-        
+        col_dl1, col_dl2 = st.columns(2)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         
-        # Görüntü İndir
         with col_dl1:
             buf_img = io.BytesIO()
             result_img.save(buf_img, format='PNG')
@@ -505,7 +467,6 @@ with tab1:
                 use_container_width=True
             )
         
-        # PDF Rapor İndir
         with col_dl2:
             try:
                 pdf_bytes = generate_pdf_report(
@@ -513,102 +474,84 @@ with tab1:
                     boxes_all, scores_all, classes_all, keep_indices,
                     gps_lat, gps_lon
                 )
-                st.download_button(
-                    label="📊 PDF Rapor İndir",
-                    data=pdf_bytes,
-                    file_name=f"agrivision_report_{timestamp}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
+                if pdf_bytes:
+                    st.download_button(
+                        label="📊 PDF Rapor İndir",
+                        data=pdf_bytes,
+                        file_name=f"agrivision_report_{timestamp}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                else:
+                    st.info("📦 PDF için: `pip install fpdf2`")
             except Exception as e:
-                st.warning(f"PDF oluşturulamadı: {e}")
-                st.info("📦 `pip install fpdf2` komutu ile yükleyin")
-        
-        # Heatmap İndir
-        with col_dl3:
-            if weed_count > 0:
-                buf_heat = io.BytesIO()
-                fig.write_image(buf_heat, format='png') if hasattr(fig, 'write_image') else None
-                st.download_button(
-                    label="📈 Heatmap İndir (PNG)",
-                    data=buf_img.getvalue(),
-                    file_name=f"agrivision_heatmap_{timestamp}.png",
-                    mime="image/png",
-                    use_container_width=True
-                )
+                st.warning(f"PDF hatası: {e}")
 
 
 # ═══════════════════════════════════════════════════════════════
-# TAB 2: VİDEO ANALİZİ
+# TAB 2: VİDEO
 # ═══════════════════════════════════════════════════════════════
 with tab2:
     st.markdown("""
-    <div class="tab-header">🎥 Video / Çoklu Kare Analizi</div>
+    <div class="tab-header">🎥 Video Analizi</div>
     """, unsafe_allow_html=True)
     
     video_file = st.file_uploader("🎥 Video Yükle", type=["mp4", "avi", "mov"])
     
     if video_file:
-        # Video'yu temp dosyaya kaydet
         tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
         tfile.write(video_file.read())
         tfile.close()
         
         cap = cv2.VideoCapture(tfile.name)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        fps = max(1, int(cap.get(cv2.CAP_PROP_FPS)))
         
-        st.info(f"📹 Video: {total_frames} kare | {fps} FPS | ~{total_frames//fps}s")
+        st.info(f"📹 {total_frames} kare | {fps} FPS | ~{total_frames // fps}s")
         
-        # Kaç karede bir analiz?
-        frame_skip = st.slider("⏭️ Her kaç karede analiz?", 5, 60, 30, 5,
-                               help="Düşük = Daha detaylı ama yavaş")
+        frame_skip = st.slider("⏭️ Her kaç karede analiz?", 5, 60, 30, 5)
         
         if st.button("🚀 Video Analizi Başlat", use_container_width=True):
             progress = st.progress(0)
             status = st.empty()
+            result_placeholder = st.empty()
             
             all_results = []
             frame_idx = 0
             processed = 0
-            
-            result_placeholder = st.empty()
             
             while cap.isOpened():
                 ret, frame = cap.read()
                 if not ret: break
                 
                 if frame_idx % frame_skip == 0:
-                    # OpenCV BGR → RGB → PIL
                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     pil_frame = Image.fromarray(frame_rgb)
                     
-                    boxes, scores, classes, areas, keep = process_image(
+                    boxes, sc, cls, areas, keep = process_image(
                         pil_frame, interpreter, input_details, output_details,
                         threshold, size_threshold, nms_iou
                     )
                     
-                    wc = sum(1 for i in keep if classes[i] == "WEED")
-                    cc = sum(1 for i in keep if classes[i] == "CROP")
+                    wc = sum(1 for i in keep if cls[i] == "WEED")
+                    cc = sum(1 for i in keep if cls[i] == "CROP")
                     
                     all_results.append({
                         'frame': frame_idx,
                         'time': frame_idx / fps,
                         'weeds': wc,
-                        'crops': cc,
-                        'total': len(keep)
+                        'crops': cc
                     })
                     
-                    # Son kareyi göster
                     if keep:
-                        result_frame = pil_frame.copy()
-                        result_frame = draw_detections(result_frame, boxes, scores, classes, keep)
-                        result_placeholder.image(result_frame, caption=f"Kare {frame_idx}", 
+                        rf = pil_frame.copy()
+                        rf = draw_detections(rf, boxes, sc, cls, keep)
+                        result_placeholder.image(rf, caption=f"Kare {frame_idx}",
                                                 use_container_width=True)
                     
                     processed += 1
                     progress.progress(min(frame_idx / total_frames, 1.0))
-                    status.text(f"İşlenen: {processed} kare | Weed: {wc} | Crop: {cc}")
+                    status.text(f"İşlenen: {processed} | Weed: {wc} | Crop: {cc}")
                 
                 frame_idx += 1
             
@@ -616,47 +559,31 @@ with tab2:
             progress.progress(1.0)
             status.success(f"✅ {processed} kare analiz edildi!")
             
-            # Video sonuç grafiği
             if all_results:
-                st.markdown("### 📈 Video Analiz Sonuçları")
-                
+                st.markdown("### 📈 Video Sonuçları")
                 times = [r['time'] for r in all_results]
                 weeds = [r['weeds'] for r in all_results]
                 crops = [r['crops'] for r in all_results]
                 
-                fig_video = go.Figure()
-                fig_video.add_trace(go.Scatter(
-                    x=times, y=weeds, mode='lines+markers',
-                    name='🌿 Weeds', line=dict(color='#FF4757', width=3)
-                ))
-                fig_video.add_trace(go.Scatter(
-                    x=times, y=crops, mode='lines+markers',
-                    name='🌾 Crops', line=dict(color='#2ED573', width=3)
-                ))
-                fig_video.update_layout(
-                    title="Zaman İçinde Tespit Sayısı",
-                    xaxis_title="Zaman (saniye)",
-                    yaxis_title="Tespit Sayısı",
-                    height=400
-                )
-                st.plotly_chart(fig_video, use_container_width=True)
+                fig_v = go.Figure()
+                fig_v.add_trace(go.Scatter(x=times, y=weeds, mode='lines+markers',
+                                           name='🌿 Weeds', line=dict(color='#FF4757', width=3)))
+                fig_v.add_trace(go.Scatter(x=times, y=crops, mode='lines+markers',
+                                           name='🌾 Crops', line=dict(color='#2ED573', width=3)))
+                fig_v.update_layout(title="Zaman İçinde Tespit",
+                                    xaxis_title="Saniye", yaxis_title="Sayı", height=400)
+                st.plotly_chart(fig_v, use_container_width=True)
                 
-                # Özet
-                total_weeds = sum(weeds)
-                total_crops = sum(crops)
                 col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("🌿 Toplam Weed", total_weeds)
-                with col2:
-                    st.metric("🌾 Toplam Crop", total_crops)
-                with col3:
-                    st.metric("📊 Max Weed/Kare", max(weeds) if weeds else 0)
+                with col1: st.metric("🌿 Toplam Weed", sum(weeds))
+                with col2: st.metric("🌾 Toplam Crop", sum(crops))
+                with col3: st.metric("📊 Max Weed/Kare", max(weeds) if weeds else 0)
     else:
-        st.info("🎥 Bir video dosyası yükleyin (MP4, AVI, MOV)")
+        st.info("🎥 MP4, AVI veya MOV dosyası yükleyin")
 
 
 # ═══════════════════════════════════════════════════════════════
-# TAB 3: GPS HARİTA
+# TAB 3: GPS
 # ═══════════════════════════════════════════════════════════════
 with tab3:
     st.markdown("""
@@ -664,46 +591,34 @@ with tab3:
     """, unsafe_allow_html=True)
     
     st.markdown("### 📍 Tarla Konumu")
-    
-    # Harita
-    map_data = {
-        'lat': [gps_lat],
-        'lon': [gps_lon]
-    }
-    
-    st.map(map_data, zoom=14)
+    st.map(pd.DataFrame({'lat': [gps_lat], 'lon': [gps_lon]}), zoom=14)
     
     st.markdown(f"""
     <div class="glass-card" style="margin-top:1rem;">
         <h3>📍 Koordinatlar</h3>
-        <p><b>Enlem:</b> {gps_lat:.6f}</p>
-        <p><b>Boylam:</b> {gps_lon:.6f}</p>
+        <p><b>Enlem:</b> {gps_lat:.6f} | <b>Boylam:</b> {gps_lon:.6f}</p>
         <p><b>Tarih:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Çoklu alan desteği
     st.markdown("### 🗺️ Çoklu Alan Takibi")
-    
     num_fields = st.number_input("Kaç tarla?", 1, 10, 3)
     
     field_data = []
     for i in range(num_fields):
         col1, col2, col3 = st.columns(3)
         with col1:
-            name = st.text_input(f"Tarla {i+1} Adı", value=f"Tarla-{i+1}", key=f"name_{i}")
+            name = st.text_input(f"Tarla {i+1} Adı", value=f"Tarla-{i+1}", key=f"n_{i}")
         with col2:
-            lat = st.number_input(f"Enlem {i+1}", value=gps_lat + (i * 0.001), 
-                                  format="%.6f", key=f"lat_{i}")
+            lat = st.number_input(f"Enlem {i+1}", value=gps_lat + (i * 0.002),
+                                  format="%.6f", key=f"la_{i}")
         with col3:
-            lon = st.number_input(f"Boylam {i+1}", value=gps_lon + (i * 0.001), 
-                                  format="%.6f", key=f"lon_{i}")
-        field_data.append({'name': name, 'lat': lat, 'lon': lon})
+            lon = st.number_input(f"Boylam {i+1}", value=gps_lon + (i * 0.002),
+                                  format="%.6f", key=f"lo_{i}")
+        field_data.append({'lat': lat, 'lon': lon})
     
     if field_data:
-        import pandas as pd
-        df_fields = pd.DataFrame(field_data)
-        st.map(df_fields[['lat', 'lon']], zoom=13)
+        st.map(pd.DataFrame(field_data), zoom=13)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -714,9 +629,6 @@ st.markdown("""
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius:20px; color:white;'>
     <h3>🌾 AgriVision AI Pro v2.0</h3>
-    <p>📸 Fotoğraf | 🎥 Video | 📈 Heatmap | 📊 PDF Rapor | 🗺️ GPS</p>
-    <p style='margin-top:0.5rem; opacity:0.7; font-size:0.9em;'>
-        Built for Precision Agriculture 🚜
-    </p>
+    <p>📸 Fotoğraf | 🎥 Video | 📈 Heatmap | 📊 PDF | 🗺️ GPS</p>
 </div>
 """, unsafe_allow_html=True)
