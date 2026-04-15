@@ -1093,7 +1093,7 @@ with tab3:
                 <div style='background: linear-gradient(135deg, {spray["overall_color"]}44, {spray["overall_color"]}22);
                             padding: 2rem; border-radius: 20px; text-align: center;
                             border: 2px solid {spray["overall_color"]}; margin-bottom: 1.5rem;'>
-                    <h2 style='margin:0;'>💊 İlaçalama Uygunluk Skoru</h2>
+                    <h2 style='margin:0;'>💊 İlaçlama Uygunluk Skoru</h2>
                     <div style='font-size:3em; font-weight:800; color:{spray["overall_color"]};'>{spray["score"]}/100</div>
                     <h3 style='margin:0;'>{spray["overall"]}</h3>
                 </div>
