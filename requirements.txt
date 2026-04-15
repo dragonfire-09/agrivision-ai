@@ -5,3 +5,4 @@ Pillow
 plotly
 opencv-python-headless
 pandas
+requests
