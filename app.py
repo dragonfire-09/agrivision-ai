@@ -1295,7 +1295,7 @@ with tab5:
                         rf = pf.copy()
                         rf = draw_detections(rf, b, s, cl, k)
                         prev.image(rf, use_container_width=True)
-                                        pc += 1
+                        pc += 1
                     prog.progress(min(fi / max(totf, 1), 1.0))
                     stat.text(f"Kare: {pc}")
                 fi += 1
