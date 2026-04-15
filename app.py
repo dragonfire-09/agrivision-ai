@@ -4,7 +4,6 @@ import tensorflow as tf
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import io
-import matplotlib.pyplot as plt
 from datetime import datetime
 
 MODEL_PATH = str(Path(__file__).parent / "best_float32.tflite")
@@ -24,6 +23,15 @@ GLASS_CSS = """
 
 st.set_page_config(page_title="🌱 AgriVision AI Pro", layout="wide", page_icon="🌱")
 st.markdown(GLASS_CSS, unsafe_allow_html=True)
+
+st.markdown("""
+<div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 2rem; border-radius: 20px; text-align: center; margin-bottom: 2rem;
+            box-shadow: 0 8px 32px rgba(102,126,234,0.4);'>
+    <h1 style='color: white; margin: 0; font-size: 2.5em;'>🌱 AgriVision AI Pro</h1>
+    <p style='color: rgba(255,255,255,0.9); margin: 0;'>Weed & Crop Detection</p>
+</div>
+""", unsafe_allow_html=True)
 
 @st.cache_resource
 def load_model():
@@ -54,23 +62,19 @@ def containment(box1, box2):
     return inter / smaller_area if smaller_area > 0 else 0
 
 def class_aware_nms(boxes, scores, classes, iou_threshold=0.3, containment_threshold=0.6):
-    """Sınıf bazlı NMS: Farklı sınıfları eleme!"""
+    """Sınıf bazlı NMS: WEED ve CROP ayrı ayrı"""
     if not boxes: return []
     
-    # Sınıf başına NMS yap
     unique_classes = list(set(classes))
     all_keep = []
     
     for cls in unique_classes:
-        # Bu sınıfa ait indexler
         cls_indices = [i for i, c in enumerate(classes) if c == cls]
         cls_boxes = [boxes[i] for i in cls_indices]
         cls_scores = [scores[i] for i in cls_indices]
         
-        if not cls_boxes:
-            continue
+        if not cls_boxes: continue
         
-        # NMS bu sınıf içinde
         indices = np.argsort(cls_scores)[::-1].tolist()
         keep = []
         
@@ -86,7 +90,6 @@ def class_aware_nms(boxes, scores, classes, iou_threshold=0.3, containment_thres
             for r in remove:
                 indices.remove(r)
         
-        # Orijinal indexlere dönüştür
         all_keep.extend([cls_indices[k] for k in keep])
     
     return all_keep
@@ -121,37 +124,32 @@ def draw_detections(img, boxes, scores, classes, keep_indices):
     
     return img
 
-# Load model
+# Load
 try:
     interpreter = load_model()
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
 except Exception as e:
-    st.error(f"❌ Model hatası: {e}")
+    st.error(f"❌ {e}")
     st.stop()
 
 # CONTROLS
-st.markdown("### 🎛️ Kontrol Paneli")
 col1, col2, col3 = st.columns(3)
 with col1:
-    uploaded = st.file_uploader("📁 Fotoğraf Yükle", type=["jpg","png","jpeg"])
+    uploaded = st.file_uploader("📁 Fotoğraf", type=["jpg","png","jpeg"])
 with col2:
-    crop_threshold = st.slider("🌾 CROP Threshold", 0.1, 0.9, 0.4, 0.05)
+    threshold = st.slider("🎯 Confidence", 0.1, 0.9, 0.3, 0.05)
 with col3:
-    weed_threshold = st.slider("🌿 WEED Threshold", 0.1, 0.9, 0.3, 0.05)
-
-col4, col5 = st.columns(2)
-with col4:
-    nms_iou = st.slider("🔗 NMS IoU", 0.1, 0.7, 0.3, 0.05)
-with col5:
-    swap_classes = st.checkbox("🔄 Sınıf Değiştir", value=True, 
-                                help="Index 0 = CROP, Index 1 = WEED")
+    # 🔥 BOYUT EŞİĞİ: Bu değerden küçük = WEED, büyük = CROP
+    size_threshold = st.slider("📏 Boyut Eşiği (%)", 5, 50, 15, 1,
+                               help="Bu yüzdeden küçük kutular = WEED, büyük = CROP")
 
 if uploaded:
     original_img = Image.open(uploaded).convert("RGB")
     w, h = original_img.size
+    total_area = w * h
     
-    with st.spinner("🔍 AI Analizi..."):
+    with st.spinner("🔍 Analiz..."):
         resized = original_img.resize((640, 640))
         arr = np.expand_dims(np.array(resized, dtype=np.float32) / 255.0, 0)
         
@@ -160,50 +158,55 @@ if uploaded:
         output_data = interpreter.get_tensor(output_details[0]['index'])[0]
         preds = np.transpose(output_data, (1, 0))
     
-    # 🔥 MULTI-CLASS DETECTION (HER CLASS İÇİN AYRI!)
-    boxes_all, scores_all, classes_all, areas_all = [], [], [], []
+    # ═══════════════════════════════════════════════════════════════
+    # 🔥 TÜM DETECTION'LARI TOPLA (class fark etmez)
+    # ═══════════════════════════════════════════════════════════════
+    raw_boxes, raw_scores = [], []
     
     for row in preds:
         x, y, bw, bh = row[0], row[1], row[2], row[3]
         class_scores = row[4:]
         
-        # Her class için ayrı kontrol
-        for class_idx in range(len(class_scores)):
-            score = class_scores[class_idx]
-            
-            # Class mapping
-            if swap_classes:
-                class_name = "CROP" if class_idx == 0 else "WEED"
-            else:
-                class_name = "WEED" if class_idx == 0 else "CROP"
-            
-            # Sınıfa özel threshold
-            if class_name == "CROP":
-                threshold = crop_threshold
-            else:
-                threshold = weed_threshold
-            
-            # Threshold kontrolü
-            if score < threshold:
-                continue
-            
-            # Box koordinatları
-            x1 = max(0, int((x - bw/2) * w))
-            y1 = max(0, int((y - bh/2) * h))
-            x2 = min(w, int((x + bw/2) * w))
-            y2 = min(h, int((y + bh/2) * h))
-            
-            if (x2 - x1) > 10 and (y2 - y1) > 10:
-                boxes_all.append([x1,y1,x2,y2])
-                scores_all.append(float(score))
-                classes_all.append(class_name)
-                areas_all.append((x2-x1)*(y2-y1))
+        # En yüksek confidence
+        best_score = np.max(class_scores)
+        
+        if best_score < threshold:
+            continue
+        
+        x1 = max(0, int((x - bw/2) * w))
+        y1 = max(0, int((y - bh/2) * h))
+        x2 = min(w, int((x + bw/2) * w))
+        y2 = min(h, int((y + bh/2) * h))
+        
+        if (x2 - x1) > 10 and (y2 - y1) > 10:
+            raw_boxes.append([x1, y1, x2, y2])
+            raw_scores.append(float(best_score))
     
-    # CLASS-AWARE NMS (farklı sınıfları eleme!)
+    # ═══════════════════════════════════════════════════════════════
+    # 🔥 BOYUTA GÖRE SINIFLANDIR
+    # ═══════════════════════════════════════════════════════════════
+    boxes_all, scores_all, classes_all, areas_all = [], [], [], []
+    size_limit = total_area * (size_threshold / 100)
+    
+    for i in range(len(raw_boxes)):
+        x1, y1, x2, y2 = raw_boxes[i]
+        box_area = (x2 - x1) * (y2 - y1)
+        
+        # 🔥 KÜÇÜK = WEED, BÜYÜK = CROP
+        if box_area < size_limit:
+            detected_class = "WEED"
+        else:
+            detected_class = "CROP"
+        
+        boxes_all.append(raw_boxes[i])
+        scores_all.append(raw_scores[i])
+        classes_all.append(detected_class)
+        areas_all.append(box_area)
+    
+    # CLASS-AWARE NMS
     keep_indices = class_aware_nms(
         boxes_all, scores_all, classes_all,
-        iou_threshold=nms_iou,
-        containment_threshold=0.6
+        iou_threshold=0.3, containment_threshold=0.6
     )
     
     # DRAW
@@ -216,13 +219,12 @@ if uploaded:
     # METRICS
     weed_count = sum(1 for i in keep_indices if classes_all[i] == "WEED")
     crop_count = sum(1 for i in keep_indices if classes_all[i] == "CROP")
-    total_area = w * h
     weed_area = sum(areas_all[i] for i in keep_indices if classes_all[i] == "WEED")
     weed_density = (weed_area / total_area) * 100 if total_area > 0 else 0
     avg_conf = np.mean([scores_all[i] for i in keep_indices]) if keep_indices else 0
     
     # GLASS CARDS
-    st.markdown("### 📊 Tespit Sonuçları")
+    st.markdown("### 📊 Sonuçlar")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown(f"""
@@ -250,42 +252,39 @@ if uploaded:
         <div class="glass-card">
             <div class="metric-icon">🎯</div>
             <h1 class="metric-value" style="color: #3742FA;">{avg_conf:.0%}</h1>
-            <p class="metric-label">AVG CONFIDENCE</p>
+            <p class="metric-label">CONFIDENCE</p>
         </div>""", unsafe_allow_html=True)
     
     # IMAGES
+    st.markdown("### 🖼️ Görüntü Karşılaştırma")
     col_img1, col_img2 = st.columns(2)
     with col_img1:
         st.image(original_img, caption="📸 Orijinal", use_container_width=True)
     with col_img2:
-        st.image(result_img, caption="🎯 Tespit Sonucu", use_container_width=True)
+        st.image(result_img, caption="🎯 Tespit", use_container_width=True)
     
-    # DETECTION DETAILS
+    # DETECTION TABLE
     if keep_indices:
-        st.markdown("### 📋 Tespit Detayları")
-        weed_detections = [i for i in keep_indices if classes_all[i] == "WEED"]
-        crop_detections = [i for i in keep_indices if classes_all[i] == "CROP"]
-        
+        st.markdown("### 📋 Detaylar")
         col_d1, col_d2 = st.columns(2)
         with col_d1:
-            st.markdown("**🌿 WEED Detections:**")
-            for i in weed_detections:
-                st.markdown(f"""
-                <div style='padding:0.5rem; margin:0.3rem; background:#FF4757; 
-                            color:white; border-radius:10px; font-weight:bold;'>
-                    🌿 WEED {scores_all[i]:.0%}
-                </div>
-                """, unsafe_allow_html=True)
-        
+            for i in keep_indices:
+                if classes_all[i] == "WEED":
+                    area_pct = (areas_all[i] / total_area) * 100
+                    st.markdown(f"""
+                    <div style='padding:0.5rem 1rem; margin:0.3rem; background:#FF4757; 
+                                color:white; border-radius:10px; font-weight:bold;'>
+                        🌿 WEED {scores_all[i]:.0%} | Alan: {area_pct:.1f}%
+                    </div>""", unsafe_allow_html=True)
         with col_d2:
-            st.markdown("**🌾 CROP Detections:**")
-            for i in crop_detections:
-                st.markdown(f"""
-                <div style='padding:0.5rem; margin:0.3rem; background:#2ED573; 
-                            color:white; border-radius:10px; font-weight:bold;'>
-                    🌾 CROP {scores_all[i]:.0%}
-                </div>
-                """, unsafe_allow_html=True)
+            for i in keep_indices:
+                if classes_all[i] == "CROP":
+                    area_pct = (areas_all[i] / total_area) * 100
+                    st.markdown(f"""
+                    <div style='padding:0.5rem 1rem; margin:0.3rem; background:#2ED573; 
+                                color:white; border-radius:10px; font-weight:bold;'>
+                        🌾 CROP {scores_all[i]:.0%} | Alan: {area_pct:.1f}%
+                    </div>""", unsafe_allow_html=True)
     
     # DOWNLOAD
     buf = io.BytesIO()
@@ -298,26 +297,12 @@ if uploaded:
         mime="image/png",
         use_container_width=True
     )
-    
-    # DEBUG
-    with st.expander("🔍 Debug Bilgileri"):
-        st.info(f"""
-        **Tespit Özeti:**
-        - Toplam prediction: {len(boxes_all)} (NMS öncesi)
-        - WEED tespit: {weed_count} 
-        - CROP tespit: {crop_count}
-        - WEED threshold: {weed_threshold}
-        - CROP threshold: {crop_threshold}
-        
-        **💡 İpucu:**
-        Eğer WEED kayboluyorsa → **WEED Threshold'u DÜŞÜR** (0.2-0.3)
-        """)
 
 st.markdown("""
 <div style='text-align:center; padding:2rem; margin-top:3rem;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius:20px; color:white;'>
-    <h2>🌾 AgriVision AI Pro</h2>
-    <p>Multi-Class Detection • Precision Agriculture • Production Ready</p>
+    <h3>🌾 Precision Agriculture AI</h3>
+    <p>🌿 Küçük = WEED (kırmızı) | 🌾 Büyük = CROP (yeşil)</p>
 </div>
 """, unsafe_allow_html=True)
