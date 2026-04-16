@@ -529,19 +529,21 @@ def draw_detections(img, boxes, scores, classes, keep):
         draw.text((x1 + 6, max(0, y1 - lh) + 4), label, fill="white", font=font)
     return img
     
-def process_single_tile(tile_img, interp, inp, out, thresh,
-                        offset_x, offset_y):
-    """Tek bir tile üzerinde detection yap"""
-    tw, th = tile_img.size
+def process_image(img, interp, inp, out, thresh, size_t, nms_iou):
+    w, h = img.size
+    ta = w * h
+
     arr = np.expand_dims(
-        np.array(tile_img.resize((640, 640)), dtype=np.float32) / 255.0, 0
+        np.array(img.resize((640, 640)), dtype=np.float32) / 255.0, 0
     )
     interp.set_tensor(inp[0]["index"], arr)
     interp.invoke()
+
     preds = np.transpose(interp.get_tensor(out[0]["index"])[0], (1, 0))
 
     CLASS_NAMES = {0: "CROP", 1: "WEED"}
-    boxes, scores, classes = [], [], []
+
+    ba, sa, ca, aa = [], [], [], []
 
     for row in preds:
         class_scores = row[4:]
@@ -552,104 +554,22 @@ def process_single_tile(tile_img, interp, inp, out, thresh,
             continue
 
         x, y, bw, bh = row[0], row[1], row[2], row[3]
-        x1 = max(0, int((x - bw / 2) * tw)) + offset_x
-        y1 = max(0, int((y - bh / 2) * th)) + offset_y
-        x2 = min(tw, int((x + bw / 2) * tw)) + offset_x
-        y2 = min(th, int((y + bh / 2) * th)) + offset_y
+        x1 = max(0, int((x - bw / 2) * w))
+        y1 = max(0, int((y - bh / 2) * h))
+        x2 = min(w, int((x + bw / 2) * w))
+        y2 = min(h, int((y + bh / 2) * h))
 
         box_w = x2 - x1
         box_h = y2 - y1
 
-        # Çok küçük ve çok büyük kutuları filtrele
-        if box_w > 10 and box_h > 10 and box_w < tw * 0.8 and box_h < th * 0.8:
-            boxes.append([x1, y1, x2, y2])
-            scores.append(best_score)
-            classes.append(CLASS_NAMES.get(class_id, "WEED"))
+        if box_w > 10 and box_h > 10:
+            a = box_w * box_h
+            ba.append([x1, y1, x2, y2])
+            sa.append(best_score)
+            ca.append(CLASS_NAMES.get(class_id, "WEED"))
+            aa.append(a)
 
-    return boxes, scores, classes
-
-
-def process_image(img, interp, inp, out, thresh, size_t, nms_iou):
-    w, h = img.size
-    ta = w * h
-
-    # ═══ TILING: Görüntüyü parçalara böl ═══
-    # Overlap ile 2x2 veya 3x3 grid
-    tile_cols = 3
-    tile_rows = 3
-    overlap = 0.2  # %20 örtüşme
-
-    tile_w = int(w / (tile_cols - (tile_cols - 1) * overlap))
-    tile_h = int(h / (tile_rows - (tile_rows - 1) * overlap))
-
-    step_x = int(tile_w * (1 - overlap))
-    step_y = int(tile_h * (1 - overlap))
-
-    all_boxes = []
-    all_scores = []
-    all_classes = []
-
-    # Her tile için detection yap
-    for row_i in range(tile_rows):
-        for col_i in range(tile_cols):
-            ox = min(col_i * step_x, w - tile_w)
-            oy = min(row_i * step_y, h - tile_h)
-            ox = max(0, ox)
-            oy = max(0, oy)
-
-            # Tile'ı kes
-            tile = img.crop((ox, oy, min(ox + tile_w, w), min(oy + tile_h, h)))
-
-            # Detection
-            t_boxes, t_scores, t_classes = process_single_tile(
-                tile, interp, inp, out, thresh, ox, oy
-            )
-
-            all_boxes.extend(t_boxes)
-            all_scores.extend(t_scores)
-            all_classes.extend(t_classes)
-
-    # ═══ TAM GÖRÜNTÜ ÜZERİNDE DE ÇALIŞtır ═══
-    f_boxes, f_scores, f_classes = process_single_tile(
-        img, interp, inp, out, thresh, 0, 0
-    )
-    all_boxes.extend(f_boxes)
-    all_scores.extend(f_scores)
-    all_classes.extend(f_classes)
-
-    # ═══ BÜYÜK KUTULARI FİLTRELE ═══
-    ba, sa, ca, aa = [], [], [], []
-    max_box_area = ta * (size_t / 100)
-
-    for i in range(len(all_boxes)):
-        bx = all_boxes[i]
-        a = (bx[2] - bx[0]) * (bx[3] - bx[1])
-
-        if a > max_box_area:
-            continue  # Çok büyük kutuları atla
-
-        ba.append(bx)
-        sa.append(all_scores[i])
-        ca.append(all_classes[i])
-        aa.append(a)
-
-    # DEBUG
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🔬 DEBUG")
-    st.sidebar.write(f"Tile sayısı: {tile_rows * tile_cols + 1}")
-    st.sidebar.write(f"Toplam tespit: **{len(ba)}**")
-    if ca:
-        weed_n = sum(1 for c in ca if c == "WEED")
-        crop_n = sum(1 for c in ca if c == "CROP")
-        st.sidebar.write(f"WEED: {weed_n} | CROP: {crop_n}")
-
-    # NMS
     keep = class_aware_nms(ba, sa, ca, nms_iou, 0.6)
-
-    st.sidebar.write(f"NMS sonrası: **{len(keep)}**")
-
-    return ba, sa, ca, aa, keep
-
     return ba, sa, ca, aa, keep
     
 def generate_heatmap(boxes, scores, classes, keep, w, h):
