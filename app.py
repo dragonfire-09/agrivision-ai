@@ -698,9 +698,10 @@ with st.sidebar:
     st.markdown("---")
     
     # Detection Settings
-    threshold = st.slider(f"🎯 {t('confidence')}", 0.1, 0.9, 0.60, 0.05)
-    size_threshold = st.slider(f"📏 {t('size_threshold')}", 5, 50, 42, 1)
-    nms_iou = st.slider(f"🔗 {t('nms_iou')}", 0.1, 0.7, 0.20, 0.05)
+       # Detection Settings
+    threshold = st.slider(f"🎯 {t('confidence')}", 0.1, 0.9, 0.15, 0.05)
+    size_threshold = st.slider(f"📏 {t('size_threshold')}", 5, 80, 50, 1)
+    nms_iou = st.slider(f"🔗 {t('nms_iou')}", 0.1, 0.7, 0.25, 0.05)
     
     st.markdown("---")
     
