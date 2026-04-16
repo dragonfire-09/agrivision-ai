@@ -529,6 +529,42 @@ def draw_detections(img, boxes, scores, classes, keep):
         draw.text((x1 + 6, max(0, y1 - lh) + 4), label, fill="white", font=font)
     return img
     
+def count_plants_in_box(img, box):
+    """WEED alanı içindeki bireysel bitkileri say"""
+    x1, y1, x2, y2 = box
+    crop = np.array(img)[y1:y2, x1:x2]
+
+    if crop.size == 0:
+        return []
+
+    hsv = cv2.cvtColor(crop, cv2.COLOR_RGB2HSV)
+
+    lower_green = np.array([25, 40, 40])
+    upper_green = np.array([90, 255, 255])
+    mask = cv2.inRange(hsv, lower_green, upper_green)
+
+    kernel = np.ones((5, 5), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
+    contours, _ = cv2.findContours(
+        mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+    )
+
+    min_area = 100
+    plants = []
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if area > min_area:
+            bx, by, bw, bh = cv2.boundingRect(cnt)
+            plants.append({
+                "box": [bx + x1, by + y1, bx + bw + x1, by + bh + y1],
+                "area": area
+            })
+
+    return plants
+
+
 def process_image(img, interp, inp, out, thresh, size_t, nms_iou):
     w, h = img.size
     ta = w * h
@@ -540,12 +576,9 @@ def process_image(img, interp, inp, out, thresh, size_t, nms_iou):
     interp.invoke()
 
     preds = np.transpose(interp.get_tensor(out[0]["index"])[0], (1, 0))
-
     CLASS_NAMES = {0: "CROP", 1: "WEED"}
 
-    # ═══ TÜM TESPİTLERİ TOPLA (filtresiz) ═══
-    all_detections = []
-
+    model_detections = []
     for row in preds:
         class_scores = row[4:]
         best_score = float(np.max(class_scores))
@@ -565,67 +598,41 @@ def process_image(img, interp, inp, out, thresh, size_t, nms_iou):
 
         if box_w > 10 and box_h > 10:
             area = box_w * box_h
-            area_pct = (area / ta) * 100
-            all_detections.append({
+            model_detections.append({
                 "box": [x1, y1, x2, y2],
                 "score": best_score,
                 "class": CLASS_NAMES.get(class_id, "WEED"),
                 "area": area,
-                "area_pct": area_pct,
-                "box_w": box_w,
-                "box_h": box_h
+                "area_pct": (area / ta) * 100
             })
 
-    # ═══ DEBUG BİLGİ ═══
+    ba, sa, ca, aa = [], [], [], []
+
+    for det in model_detections:
+        if det["area_pct"] > 10:
+            plants = count_plants_in_box(img, det["box"])
+            for plant in plants:
+                ba.append(plant["box"])
+                sa.append(det["score"])
+                ca.append(det["class"])
+                aa.append(plant["area"])
+        else:
+            ba.append(det["box"])
+            sa.append(det["score"])
+            ca.append(det["class"])
+            aa.append(det["area"])
+
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 🔬 DEBUG")
-    st.sidebar.write(f"Toplam tespit: **{len(all_detections)}**")
-
-    if all_detections:
-        # Boyuta göre sırala
-        sorted_det = sorted(all_detections, key=lambda d: d["area"])
-
-        st.sidebar.markdown("**En küçük 5 kutu:**")
-        for i, d in enumerate(sorted_det[:5]):
-            st.sidebar.write(
-                f"#{i}: {d['class']} {d['score']:.2f} | "
-                f"{d['box_w']}x{d['box_h']}px | "
-                f"{d['area_pct']:.1f}%"
-            )
-
-        st.sidebar.markdown("**En büyük 5 kutu:**")
-        for i, d in enumerate(sorted_det[-5:]):
-            st.sidebar.write(
-                f"#{i}: {d['class']} {d['score']:.2f} | "
-                f"{d['box_w']}x{d['box_h']}px | "
-                f"{d['area_pct']:.1f}%"
-            )
-
-        # Boyut dağılımı
-        small = sum(1 for d in all_detections if d["area_pct"] < 5)
-        medium = sum(1 for d in all_detections if 5 <= d["area_pct"] < 20)
-        large = sum(1 for d in all_detections if d["area_pct"] >= 20)
-        st.sidebar.write(f"Küçük(<5%): {small} | Orta(5-20%): {medium} | Büyük(>20%): {large}")
-
-    # ═══ NORMAL İŞLEM ═══
-    ba, sa, ca, aa = [], [], [], []
-    for d in all_detections:
-        ba.append(d["box"])
-        sa.append(d["score"])
-        ca.append(d["class"])
-        aa.append(d["area"])
+    st.sidebar.write(f"Model tespiti: {len(model_detections)}")
+    st.sidebar.write(f"Bitki tespiti: **{len(ba)}**")
+    if ca:
+        weed_n = sum(1 for c in ca if c == "WEED")
+        crop_n = sum(1 for c in ca if c == "CROP")
+        st.sidebar.write(f"WEED: {weed_n} | CROP: {crop_n}")
 
     keep = class_aware_nms(ba, sa, ca, nms_iou, 0.6)
-
     st.sidebar.write(f"NMS sonrası: **{len(keep)}**")
-    if keep:
-        for i in keep:
-            d = all_detections[i]
-            st.sidebar.write(
-                f"→ {d['class']} {d['score']:.2f} | "
-                f"{d['box_w']}x{d['box_h']} | "
-                f"{d['area_pct']:.1f}%"
-            )
 
     return ba, sa, ca, aa, keep
     
