@@ -793,11 +793,11 @@ with tab1:
         if ki:
             result_img = draw_detections(result_img, ba, sa, ca, ki)
         
-        wc = sum(1 for i in ki if ca[i] == "WEED")
-        cc = sum(1 for i in ki if ca[i] == "CROP")
-        wa = sum(aa[i] for i in ki if ca[i] == "WEED")
-        wd = (wa / ta) * 100 if ta > 0 else 0
-        ac = float(np.mean([sa[i] for i in ki])) if ki else 0
+      wc = sum(1 for i in ki if ca[i] == "WEED")
+      cc = sum(1 for i in ki if ca[i] == "CROP")
+      total_plants = wc + cc
+      wd = (wc / max(total_plants, 1)) * 100
+      ac = float(np.mean([sa[i] for i in ki])) if ki else 0
         
         # Save to history
         st.session_state.scan_history.append({
@@ -933,11 +933,11 @@ with tab2:
                     result_img_m = img.copy()
                     if ki_m:
                         result_img_m = draw_detections(result_img_m, ba_m, sa_m, ca_m, ki_m)
-                    
+                        
                     wc_m = sum(1 for i in ki_m if ca_m[i] == "WEED")
                     cc_m = sum(1 for i in ki_m if ca_m[i] == "CROP")
-                    wa_m = sum(aa_m[i] for i in ki_m if ca_m[i] == "WEED")
-                    wd_m = (wa_m / ta_img) * 100 if ta_img > 0 else 0
+                    total_plants_m = wc_m + cc_m
+                    wd_m = (wc_m / max(total_plants_m, 1)) * 100
                     ac_m = float(np.mean([sa_m[i] for i in ki_m])) if ki_m else 0
                     
                     all_results.append({
