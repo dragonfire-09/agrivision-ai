@@ -528,32 +528,52 @@ def draw_detections(img, boxes, scores, classes, keep):
         draw.rectangle([x1, max(0, y1 - lh), x1 + lw, max(0, y1 - lh) + lh], fill=bg)
         draw.text((x1 + 6, max(0, y1 - lh) + 4), label, fill="white", font=font)
     return img
-
+    
 def process_image(img, interp, inp, out, thresh, size_t, nms_iou):
     w, h = img.size
     ta = w * h
-    arr = np.expand_dims(np.array(img.resize((640, 640)), dtype=np.float32) / 255.0, 0)
+
+    arr = np.expand_dims(
+        np.array(img.resize((640, 640)), dtype=np.float32) / 255.0, 0
+    )
     interp.set_tensor(inp[0]["index"], arr)
     interp.invoke()
+
     preds = np.transpose(interp.get_tensor(out[0]["index"])[0], (1, 0))
-    rb, rs = [], []
-    for row in preds:
-        bs = float(np.max(row[4:]))
-        if bs < thresh: continue
-        x, y, bw, bh = row[0], row[1], row[2], row[3]
-        x1, y1 = max(0, int((x - bw / 2) * w)), max(0, int((y - bh / 2) * h))
-        x2, y2 = min(w, int((x + bw / 2) * w)), min(h, int((y + bh / 2) * h))
-        if (x2 - x1) > 10 and (y2 - y1) > 10:
-            rb.append([x1, y1, x2, y2])
-            rs.append(bs)
+
+    # Modelinin sınıf haritası (data.yaml sırasına göre)
+    # Eğer ters çalışırsa 0 ve 1'i değiştir!
+    CLASS_NAMES = {0: "CROP", 1: "WEED"}
+
     ba, sa, ca, aa = [], [], [], []
     sl = ta * (size_t / 100)
-    for i in range(len(rb)):
-        a = (rb[i][2] - rb[i][0]) * (rb[i][3] - rb[i][1])
-        ba.append(rb[i])
-        sa.append(rs[i])
-        ca.append("WEED" if a < sl else "CROP")
-        aa.append(a)
+
+    for row in preds:
+        class_scores = row[4:]
+        best_score = float(np.max(class_scores))
+        class_id = int(np.argmax(class_scores))
+
+        if best_score < thresh:
+            continue
+
+        x, y, bw, bh = row[0], row[1], row[2], row[3]
+        x1 = max(0, int((x - bw / 2) * w))
+        y1 = max(0, int((y - bh / 2) * h))
+        x2 = min(w, int((x + bw / 2) * w))
+        y2 = min(h, int((y + bh / 2) * h))
+
+        if (x2 - x1) > 10 and (y2 - y1) > 10:
+            a = (x2 - x1) * (y2 - y1)
+
+            # Çok büyük kutuları filtrele (tüm resmi kaplayan yanlış tespitler)
+            if a > sl:
+                continue
+
+            ba.append([x1, y1, x2, y2])
+            sa.append(best_score)
+            ca.append(CLASS_NAMES.get(class_id, "WEED"))
+            aa.append(a)
+
     return ba, sa, ca, aa, class_aware_nms(ba, sa, ca, nms_iou, 0.6)
 
 def generate_heatmap(boxes, scores, classes, keep, w, h):
