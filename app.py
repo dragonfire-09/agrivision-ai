@@ -543,7 +543,8 @@ def process_image(img, interp, inp, out, thresh, size_t, nms_iou):
 
     CLASS_NAMES = {0: "CROP", 1: "WEED"}
 
-    ba, sa, ca, aa = [], [], [], []
+    # ═══ TÜM TESPİTLERİ TOPLA (filtresiz) ═══
+    all_detections = []
 
     for row in preds:
         class_scores = row[4:]
@@ -563,13 +564,69 @@ def process_image(img, interp, inp, out, thresh, size_t, nms_iou):
         box_h = y2 - y1
 
         if box_w > 10 and box_h > 10:
-            a = box_w * box_h
-            ba.append([x1, y1, x2, y2])
-            sa.append(best_score)
-            ca.append(CLASS_NAMES.get(class_id, "WEED"))
-            aa.append(a)
+            area = box_w * box_h
+            area_pct = (area / ta) * 100
+            all_detections.append({
+                "box": [x1, y1, x2, y2],
+                "score": best_score,
+                "class": CLASS_NAMES.get(class_id, "WEED"),
+                "area": area,
+                "area_pct": area_pct,
+                "box_w": box_w,
+                "box_h": box_h
+            })
+
+    # ═══ DEBUG BİLGİ ═══
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 🔬 DEBUG")
+    st.sidebar.write(f"Toplam tespit: **{len(all_detections)}**")
+
+    if all_detections:
+        # Boyuta göre sırala
+        sorted_det = sorted(all_detections, key=lambda d: d["area"])
+
+        st.sidebar.markdown("**En küçük 5 kutu:**")
+        for i, d in enumerate(sorted_det[:5]):
+            st.sidebar.write(
+                f"#{i}: {d['class']} {d['score']:.2f} | "
+                f"{d['box_w']}x{d['box_h']}px | "
+                f"{d['area_pct']:.1f}%"
+            )
+
+        st.sidebar.markdown("**En büyük 5 kutu:**")
+        for i, d in enumerate(sorted_det[-5:]):
+            st.sidebar.write(
+                f"#{i}: {d['class']} {d['score']:.2f} | "
+                f"{d['box_w']}x{d['box_h']}px | "
+                f"{d['area_pct']:.1f}%"
+            )
+
+        # Boyut dağılımı
+        small = sum(1 for d in all_detections if d["area_pct"] < 5)
+        medium = sum(1 for d in all_detections if 5 <= d["area_pct"] < 20)
+        large = sum(1 for d in all_detections if d["area_pct"] >= 20)
+        st.sidebar.write(f"Küçük(<5%): {small} | Orta(5-20%): {medium} | Büyük(>20%): {large}")
+
+    # ═══ NORMAL İŞLEM ═══
+    ba, sa, ca, aa = [], [], [], []
+    for d in all_detections:
+        ba.append(d["box"])
+        sa.append(d["score"])
+        ca.append(d["class"])
+        aa.append(d["area"])
 
     keep = class_aware_nms(ba, sa, ca, nms_iou, 0.6)
+
+    st.sidebar.write(f"NMS sonrası: **{len(keep)}**")
+    if keep:
+        for i in keep:
+            d = all_detections[i]
+            st.sidebar.write(
+                f"→ {d['class']} {d['score']:.2f} | "
+                f"{d['box_w']}x{d['box_h']} | "
+                f"{d['area_pct']:.1f}%"
+            )
+
     return ba, sa, ca, aa, keep
     
 def generate_heatmap(boxes, scores, classes, keep, w, h):
