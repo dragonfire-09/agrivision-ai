@@ -539,14 +539,44 @@ def process_image(img, interp, inp, out, thresh, size_t, nms_iou):
     interp.set_tensor(inp[0]["index"], arr)
     interp.invoke()
 
-    preds = np.transpose(interp.get_tensor(out[0]["index"])[0], (1, 0))
+    raw = interp.get_tensor(out[0]["index"])[0]
+    preds = np.transpose(raw, (1, 0))
 
-    # Modelinin sınıf haritası (data.yaml sırasına göre)
-    # Eğer ters çalışırsa 0 ve 1'i değiştir!
+    # ══════ DEBUG BİLGİ ══════
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 🔬 DEBUG")
+    st.sidebar.write(f"Raw shape: {raw.shape}")
+    st.sidebar.write(f"Preds shape: {preds.shape}")
+    st.sidebar.write(f"Sınıf sayısı: {preds.shape[1] - 4}")
+
+    # İlk yüksek skorlu satırları göster
+    high_score_count = 0
+    sample_rows = []
+    for row in preds:
+        class_scores = row[4:]
+        best = float(np.max(class_scores))
+        if best > 0.05:
+            high_score_count += 1
+            if len(sample_rows) < 5:
+                sample_rows.append({
+                    "score": f"{best:.3f}",
+                    "class_id": int(np.argmax(class_scores)),
+                    "all_scores": [f"{s:.3f}" for s in class_scores],
+                    "box": [f"{v:.2f}" for v in row[:4]]
+                })
+
+    st.sidebar.write(f"Score > 0.05: **{high_score_count}** adet")
+    st.sidebar.write(f"Score > thresh({thresh}): kontrol ediliyor...")
+    
+    for i, sr in enumerate(sample_rows):
+        st.sidebar.write(f"#{i}: cls={sr['class_id']}, "
+                        f"score={sr['score']}, "
+                        f"scores={sr['all_scores']}")
+    # ══════ DEBUG BİTİŞ ══════
+
     CLASS_NAMES = {0: "CROP", 1: "WEED"}
 
     ba, sa, ca, aa = [], [], [], []
-    sl = ta * (size_t / 100)
 
     for row in preds:
         class_scores = row[4:]
@@ -564,18 +594,25 @@ def process_image(img, interp, inp, out, thresh, size_t, nms_iou):
 
         if (x2 - x1) > 10 and (y2 - y1) > 10:
             a = (x2 - x1) * (y2 - y1)
-
-            # Çok büyük kutuları filtrele (tüm resmi kaplayan yanlış tespitler)
-            if a > sl:
-                continue
-
             ba.append([x1, y1, x2, y2])
             sa.append(best_score)
             ca.append(CLASS_NAMES.get(class_id, "WEED"))
             aa.append(a)
 
-    return ba, sa, ca, aa, class_aware_nms(ba, sa, ca, nms_iou, 0.6)
+    # DEBUG: Filtre öncesi sayı
+    st.sidebar.write(f"Filtre öncesi: **{len(ba)}** tespit")
+    if ca:
+        weed_n = sum(1 for c in ca if c == "WEED")
+        crop_n = sum(1 for c in ca if c == "CROP")
+        st.sidebar.write(f"WEED: {weed_n} | CROP: {crop_n}")
 
+    keep = class_aware_nms(ba, sa, ca, nms_iou, 0.6)
+
+    # DEBUG: NMS sonrası
+    st.sidebar.write(f"NMS sonrası: **{len(keep)}** tespit")
+
+    return ba, sa, ca, aa, keep
+    
 def generate_heatmap(boxes, scores, classes, keep, w, h):
     gs = 20
     r, c = h // gs + 1, w // gs + 1
