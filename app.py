@@ -622,18 +622,7 @@ def process_image(img, interp, inp, out, thresh, size_t, nms_iou):
             ca.append(det["class"])
             aa.append(det["area"])
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🔬 DEBUG")
-    st.sidebar.write(f"Model tespiti: {len(model_detections)}")
-    st.sidebar.write(f"Bitki tespiti: **{len(ba)}**")
-    if ca:
-        weed_n = sum(1 for c in ca if c == "WEED")
-        crop_n = sum(1 for c in ca if c == "CROP")
-        st.sidebar.write(f"WEED: {weed_n} | CROP: {crop_n}")
-
     keep = class_aware_nms(ba, sa, ca, nms_iou, 0.6)
-    st.sidebar.write(f"NMS sonrası: **{len(keep)}**")
-
     return ba, sa, ca, aa, keep
     
 def generate_heatmap(boxes, scores, classes, keep, w, h):
