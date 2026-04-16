@@ -788,8 +788,8 @@ with tab1:
         with st.spinner(f"🔍 {t('analyzing')}"):
             ba, sa, ca, aa, ki = process_image(original_img, interpreter, input_details,
                                                 output_details, threshold, size_threshold, nms_iou)
-        
-         result_img_m = img.copy()
+            
+                            result_img_m = img.copy()
                     if ki_m:
                         result_img_m = draw_detections(result_img_m, ba_m, sa_m, ca_m, ki_m)
                     
