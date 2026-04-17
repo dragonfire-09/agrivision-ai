@@ -909,7 +909,7 @@ with tab1:
         
         # Download
         st.markdown(f"### 💾 {t('download')}")
-        d1, d2, d3, d4 = st.columns(4)
+        d1, d2, d3, d4, d5 = st.columns(5)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         with d1:
             buf = io.BytesIO()
@@ -997,6 +997,19 @@ with tab1:
                     f"{n['text']}</div>",
                     unsafe_allow_html=True
                 )
+                
+        with d5:
+            app_url = "https://agrivision-ai.streamlit.app"
+            qr = qrcode.make(app_url)
+            qr_buf = io.BytesIO()
+            qr.save(qr_buf, format="PNG")
+            st.download_button(
+                "📱 QR",
+                qr_buf.getvalue(),
+                "agrivision_qr.png",
+                "image/png",
+                use_container_width=True
+            )
 # ═══════════════════════════════════════════════════════════════
 # TAB 2: ÇOKLU FOTOĞRAF
 # ═══════════════════════════════════════════════════════════════
