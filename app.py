@@ -1309,6 +1309,45 @@ with tab3:
                     fig_w.add_hline(y=15, line_dash="dash", line_color="red", annotation_text="Rüzgar Limiti")
                     fig_w.update_layout(height=400)
                     st.plotly_chart(fig_w, use_container_width=True)
+                                    # Toprak Sicakligi Tahmini
+                st.markdown("### 🌡️ Toprak Sicakligi Tahmini")
+                air_temp = spray["temp"]
+                soil_surface = air_temp * 0.95 + 2
+                soil_10cm = air_temp * 0.8 + 4
+                soil_30cm = air_temp * 0.6 + 8
+
+                ts1, ts2, ts3 = st.columns(3)
+                with ts1:
+                    st.markdown(
+                        f"<div class='glass-card'>"
+                        f"<div class='metric-icon'>🌱</div>"
+                        f"<div class='metric-value'>{soil_surface:.1f}°C</div>"
+                        f"<div class='metric-label'>Yuzey</div></div>",
+                        unsafe_allow_html=True
+                    )
+                with ts2:
+                    st.markdown(
+                        f"<div class='glass-card'>"
+                        f"<div class='metric-icon'>🌿</div>"
+                        f"<div class='metric-value'>{soil_10cm:.1f}°C</div>"
+                        f"<div class='metric-label'>10 cm</div></div>",
+                        unsafe_allow_html=True
+                    )
+                with ts3:
+                    st.markdown(
+                        f"<div class='glass-card'>"
+                        f"<div class='metric-icon'>🌾</div>"
+                        f"<div class='metric-value'>{soil_30cm:.1f}°C</div>"
+                        f"<div class='metric-label'>30 cm</div></div>",
+                        unsafe_allow_html=True
+                    )
+
+                if soil_10cm > 12:
+                    st.success("✅ Toprak sicakligi ekim icin uygun!")
+                elif soil_10cm > 8:
+                    st.warning("🟡 Toprak henuz soguk. Birkac gun bekleyin.")
+                else:
+                    st.error("🔴 Toprak cok soguk. Ekim yapmayin.")
         else:
             st.error("❌ Hava durumu alınamadı.")
     else:
