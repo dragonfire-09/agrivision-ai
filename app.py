@@ -12,6 +12,9 @@ import tempfile
 import cv2
 import pandas as pd
 import requests
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
 
 MODEL_PATH = str(Path(__file__).parent / "best_float32.tflite")
 
@@ -893,10 +896,6 @@ with tab1:
             st.plotly_chart(fig, use_container_width=True)
         
         # Download
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-from reportlab.lib.utils import ImageReader
-
         st.markdown(f"### 💾 {t('download')}")
         d1, d2, d3, d4 = st.columns(4)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
