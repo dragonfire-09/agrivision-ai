@@ -12,6 +12,7 @@ import tempfile
 import cv2
 import pandas as pd
 import requests
+import qrcode
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
@@ -1000,7 +1001,7 @@ with tab1:
                 
         with d5:
             app_url = "https://agrivision-ai.streamlit.app"
-            qr = qrcode.make(https://agrivision-ai09.streamlit.app/)
+            qr = qrcode.make("https://agrivision-ai09.streamlit.app/")
             qr_buf = io.BytesIO()
             qr.save(qr_buf, format="PNG")
             st.download_button(
