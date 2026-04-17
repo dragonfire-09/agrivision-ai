@@ -1000,7 +1000,7 @@ with tab1:
                 
         with d5:
             app_url = "https://agrivision-ai.streamlit.app"
-            qr = qrcode.make(app_url)
+            qr = qrcode.make(https://agrivision-ai09.streamlit.app/)
             qr_buf = io.BytesIO()
             qr.save(qr_buf, format="PNG")
             st.download_button(
