@@ -754,14 +754,6 @@ with st.sidebar:
         st.session_state.scan_history = []
         st.rerun()
 
-    st.markdown(f"### 📜 {t('history')}")
-    if st.session_state.scan_history:
-        for s in st.session_state.scan_history[-5:][::-1]:
-            st.markdown(f"• {s['time']} | 🌿{s['weeds']} 🌾{s['crops']} 📊{s['density']:.1f}%")
-    if st.button(f"🗑️ {t('clear')}", use_container_width=True):
-        st.session_state.scan_history = []
-        st.rerun()
-
 # ═══════════════════════════════════════════════════════════════
 # TABS
 # ═══════════════════════════════════════════════════════════════
