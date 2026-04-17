@@ -6,3 +6,4 @@ plotly
 opencv-python-headless
 pandas
 requests
+reportlab
