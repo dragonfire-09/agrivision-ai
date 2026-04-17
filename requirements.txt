@@ -1,10 +1,11 @@
 streamlit
 tensorflow
 numpy
-Pillow
+pillow
 plotly
 opencv-python-headless
 pandas
 requests
 reportlab
+streamlit-image-comparison
 qrcode[pil]
