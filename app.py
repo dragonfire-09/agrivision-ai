@@ -855,12 +855,27 @@ with tab1:
         with c4:
             st.markdown(f"<div class='glass-card'><div class='metric-icon'>🎯</div><div class='metric-value' style='color:#3 742FA'>{ac:.0%}</div><div class='metric-label'>{t('conf')}</div></div>", unsafe_allow_html=True)
         
-        # Images
-        i1, i2 = st.columns(2)
-        with i1:
-            st.image(original_img, caption=f"📸 {t('original')}", use_container_width=True)
-        with i2:
-            st.image(result_img, caption=f"🎯 {t('result')}", use_container_width=True)
+                # Images
+        view_mode = st.radio(
+            "🖼️ Gorunum:",
+            ["📸 Yan Yana", "🔄 Before/After"],
+            horizontal=True,
+            key="view_mode"
+        )
+        if view_mode == "🔄 Before/After":
+            from streamlit_image_comparison import image_comparison
+            image_comparison(
+                img1=original_img,
+                img2=result_img,
+                label1=t("original"),
+                label2=t("result"),
+            )
+        else:
+            i1, i2 = st.columns(2)
+            with i1:
+                st.image(original_img, caption=f"📸 {t('original')}", use_container_width=True)
+            with i2:
+                st.image(result_img, caption=f"🎯 {t('result')}", use_container_width=True)
         
         # Detection Table
         if ki:
