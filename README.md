@@ -72,4 +72,11 @@ dataset limitation into a hybrid AI solution.
 ---
 
 ## 🛠️ Tech Stack
+Frontend: Streamlit
+AI Model: TensorFlow Lite (YOLOv8)
+CV Pipeline: OpenCV
+Charts: Plotly
+Weather: OpenWeatherMap API
+PDF: ReportLab
+Language: Python 3.11
 
