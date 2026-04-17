@@ -440,6 +440,8 @@ if "alert_threshold" not in st.session_state:
     st.session_state.alert_threshold = 25.0
 if "enable_alerts" not in st.session_state:
     st.session_state.enable_alerts = True
+if "field_notes" not in st.session_state:
+    st.session_state.field_notes = []
 
 # ═══════════════════════════════════════════════════════════════
 # PAGE CONFIG
@@ -958,6 +960,43 @@ with tab1:
             c.save()
             pdf_buf.seek(0)
             st.download_button("📄 PDF", pdf_buf.getvalue(), f"rapor_{ts}.pdf", "application/pdf", use_container_width=True)
+                    # Tarla Notlari
+        st.markdown("### 📝 Tarla Notu")
+        nt1, nt2 = st.columns([3, 1])
+        with nt1:
+            note_text = st.text_area("Not yazin...", key="note_input", height=80)
+        with nt2:
+            note_tag = st.selectbox("Etiket", [
+                "🌿 Yabanci Ot",
+                "🌾 Mahsul",
+                "💊 Ilaclama",
+                "💧 Sulama",
+                "🐛 Zararli",
+                "📋 Genel"
+            ], key="note_tag")
+        if st.button("💾 Notu Kaydet", use_container_width=True, key="save_note"):
+            if note_text:
+                st.session_state.field_notes.append({
+                    "time": datetime.now().strftime("%d/%m %H:%M"),
+                    "tag": note_tag,
+                    "text": note_text,
+                    "weeds": wc,
+                    "crops": cc,
+                    "density": round(wd, 1)
+                })
+                st.success("✅ Not kaydedildi!")
+
+        if st.session_state.field_notes:
+            st.markdown("### 📋 Notlarim")
+            for n in st.session_state.field_notes[::-1]:
+                st.markdown(
+                    f"<div style='background:rgba(102,126,234,0.1);border-radius:12px;"
+                    f"padding:1rem;margin:0.5rem 0;border-left:4px solid #667eea;'>"
+                    f"<b>{n['tag']}</b> · {n['time']} · "
+                    f"🌿{n['weeds']} 🌾{n['crops']} 📊{n['density']}%<br>"
+                    f"{n['text']}</div>",
+                    unsafe_allow_html=True
+                )
 # ═══════════════════════════════════════════════════════════════
 # TAB 2: ÇOKLU FOTOĞRAF
 # ═══════════════════════════════════════════════════════════════
