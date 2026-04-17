@@ -799,7 +799,17 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
 
 # TAB 1: Single Photo
 with tab1:
-    uploaded = st.file_uploader(f"📁 {t('upload_photo')}", type=["jpg", "png", "jpeg"], key="photo")
+   with tab1:
+    input_method = st.radio(
+        "📷 Kaynak:",
+        ["📁 Dosya Yukle", "📸 Kamera"],
+        horizontal=True,
+        key="input_method"
+    )
+    if input_method == "📸 Kamera":
+        uploaded = st.camera_input("📸 Fotograf cekin", key="camera")
+    else:
+        uploaded = st.file_uploader(f"📁 {t('upload_photo')}", type=["jpg", "png", "jpeg"], key="photo")
     if uploaded:
         original_img = Image.open(uploaded).convert("RGB")
         w, h = original_img.size
