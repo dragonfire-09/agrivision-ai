@@ -762,33 +762,6 @@ with st.sidebar:
         st.session_state.scan_history = []
         st.rerun()
 
-    # ═══════ ZİYARETÇİ SAYACI ═══════
-    COUNTER_FILE = Path(__file__).parent / "visitor_count.json"
-    try:
-        vd = json.loads(COUNTER_FILE.read_text()) if COUNTER_FILE.exists() else {"total": 0, "today": 0, "date": ""}
-    except Exception:
-        vd = {"total": 0, "today": 0, "date": ""}
-    
-    if "counted" not in st.session_state:
-        st.session_state.counted = True
-        today = datetime.now().strftime("%Y-%m-%d")
-        vd["total"] += 1
-        vd["today"] = vd["today"] + 1 if vd["date"] == today else 1
-        vd["date"] = today
-        try:
-            COUNTER_FILE.write_text(json.dumps(vd))
-        except Exception:
-            pass
-
-    st.markdown("---")
-    st.markdown(
-        f"<div style='text-align:center;padding:0.8rem;"
-        f"background:rgba(102,126,234,0.15);border-radius:10px;'>"
-        f"<p style='margin:0;'>👥 <b>{vd['total']}</b> toplam"
-        f" · 📅 <b>{vd['today']}</b> bugun</p></div>",
-        unsafe_allow_html=True
-    )
-
 # ═══════════════════════════════════════════════════════════════
 # TABS
 # ═══════════════════════════════════════════════════════════════
