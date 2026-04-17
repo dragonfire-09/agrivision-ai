@@ -901,7 +901,7 @@ with tab1:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         with d1:
             buf = io.BytesIO()
-            res_img.save(buf, format="PNG")
+            result_img.save(buf, format="PNG")
             st.download_button("🖼️ PNG", buf.getvalue(), f"agri_{ts}.png", "image/png", use_container_width=True)
         with d2:
             jr = {"timestamp": ts, "weeds": wc, "crops": cc, "density": round(wd, 2)}
@@ -920,7 +920,7 @@ with tab1:
             c.drawString(50, ph - 75, f"Date: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
             c.drawString(50, ph - 90, f"GPS: {gps_lat:.6f}, {gps_lon:.6f}")
             img_buf = io.BytesIO()
-            res_img.save(img_buf, format="PNG")
+            result_img.save(img_buf, format="PNG")
             img_buf.seek(0)
             c.drawImage(ImageReader(img_buf), 50, ph - 420, width=500, height=310, preserveAspectRatio=True)
             y = ph - 460
